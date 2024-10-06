@@ -1,0 +1,116 @@
+name: 'Build artifacts'
+run-name: 'Build artifacts ${{  github.sha }}'
+
+on:
+  push:
+    branches: master
+  pull_request:
+    types: [opened, edited]
+
+jobs:
+  build-linux:
+    name: Linux
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Install system packages
+        shell: bash
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y build-essential cmake ninja-build
+      - uses: actions/checkout@v4
+      - name: Debug build
+        shell: bash
+        run: |
+           ./build_all
+      - name: Release build
+        shell: bash
+        run: |
+           ./build_all Release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Artifacts-Linux-Debug
+          path: Install/Linux_64/Debug
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Artifacts-Linux-Release
+          path: Install/Linux_64/Release
+          if-no-files-found: error
+
+  build-linux-docker:
+    name: Linux Docker
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: Repo
+      - name: Create Docker image
+        shell: bash
+        run: |
+          docker build -t builder:latest Repo/.github
+      - name: Create Generated directory
+        shell: bash
+        run: |
+          mkdir Generated
+      - name: Debug build
+        shell: bash
+        run: |
+          docker run \
+            --rm \
+            --name builder \
+            --mount type=bind,source="$(pwd)/Repo",target=/Repo,readonly \
+            --mount type=bind,source="$(pwd)/Generated",target=/Generated \
+            --workdir=/Repo \
+            builder:latest \
+           /Repo/build_all --generated-dir /Generated
+      - name: Release build
+        shell: bash
+        run: |
+          docker run \
+            --rm \
+            --name builder \
+            --mount type=bind,source="$(pwd)/Repo",target=/Repo,readonly \
+            --mount type=bind,source="$(pwd)/Generated",target=/Generated \
+            --workdir=/Repo \
+            builder:latest \
+           /Repo/build_all Release --generated-dir /Generated
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Artifacts-Linux-Docker-Debug
+          path: Generated/Install/Linux_64/Debug
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Artifacts-Linux-Docker-Release
+          path: Generated/Install/Linux_64/Release
+          if-no-files-found: error
+
+  build-windows:
+    name: Windows
+    runs-on: windows-2022
+    steps:
+      - name: Install Ninja
+        shell: bash
+        run: |
+          choco install ninja
+      - uses: actions/checkout@v4
+      - name: Debug build
+        shell: cmd
+        run: |
+           call "%PROGRAMFILES%/Microsoft Visual Studio/2022/Enterprise/VC/Auxiliary/Build/vcvarsall.bat" x64
+           "C:\Program Files\Git\bin\bash.exe" -c "./build_all Debug"
+      - name: Release build
+        shell: cmd
+        run: |
+           call "%PROGRAMFILES%/Microsoft Visual Studio/2022/Enterprise/VC/Auxiliary/Build/vcvarsall.bat" x64
+           "C:\Program Files\Git\bin\bash.exe" -c "./build_all Release"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Artifacts-Windows-Debug
+          path: Install/Windows_64/Debug
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Artifacts-Windows-Release
+          path: Install/Windows_64/Release
+          if-no-files-found: error

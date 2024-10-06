@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+set -o nounset -o pipefail -o errexit
+
+TOP_LEVEL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
+GENERATED_DIR="${TOP_LEVEL_DIR}"
+
+# Determine BUILD_PLATFORM
+KERNEL_NAME="$(uname -s)"
+case "${KERNEL_NAME}" in
+    M*) BUILD_PLATFORM="Windows_64"
+        ;;
+    D*) BUILD_PLATFORM="MacOS_64"
+        # TODO Handle non-x86_64 hardware
+        ;;
+    *)  BUILD_PLATFORM="Linux_64"
+esac
+
+usage() {
+    printf "$0 [BUILD_TYPE] [options]...\n\n"
+    printf "Build the GitHub Docker Test demo\n\n"
+    printf "Positional arguments:\n"
+    printf " BUILD_TYPE             BUILD_TYPE to use\n\n"
+    printf "options:\n"
+    printf " -h, --help             show this message and exit\n"
+    printf " --generated-dir        use directory as base for generated directories\n"
+    exit 0
+}
+
+error() {
+    >&2 echo $1
+    exit 1
+}
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -h|--help)
+            usage
+            ;;
+        --generated-dir)
+            GENERATED_DIR="$(realpath $2)"
+            shift
+            shift
+            ;;
+        -*|--*)
+            error "Unknown option $1"
+            exit 1
+            ;;
+        *)
+            if [ -z ${BUILD_TYPE+x} ]; then
+                BUILD_TYPE=$1
+                shift
+            else
+                error "Unexpected argument ($1)"
+            fi
+            ;;
+    esac
+done
+
+if [ -z ${BUILD_TYPE+x} ]; then
+    BUILD_TYPE=Debug
+fi
+
+BUILD_DIR="${GENERATED_DIR}/Build/${BUILD_PLATFORM}/${BUILD_TYPE}"
+INSTALL_DIR="${GENERATED_DIR}/Install/${BUILD_PLATFORM}/${BUILD_TYPE}"
+
+rm -rf "${BUILD_DIR}"
+rm -rf "${INSTALL_DIR}"
+
+mkdir -p "${BUILD_DIR}"
+cmake -S "${TOP_LEVEL_DIR}" -B "${BUILD_DIR}" -DCMAKE_BUILD_TYPE=${BUILD_TYPE} -GNinja -DCMAKE_INSTALL_PREFIX="${INSTALL_DIR}"
+cmake --build "${BUILD_DIR}"
+cmake --install "${BUILD_DIR}"
